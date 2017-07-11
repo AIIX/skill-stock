@@ -24,6 +24,7 @@ from os.path import dirname
 
 from mycroft.skills.core import MycroftSkill
 from mycroft.util.log import getLogger
+from mycroft.messagebus.message import Message
 
 __author__ = 'eward'
 logger = getLogger(__name__)
@@ -32,6 +33,8 @@ logger = getLogger(__name__)
 class StockSkill(MycroftSkill):
     def __init__(self):
         super(StockSkill, self).__init__(name="StockSkill")
+        self.html_index = dirname(__file__) + '/html/'
+        self.js_index = dirname(__file__) + '/html/chartscript.js'
 
     def initialize(self):
         stock_price_intent = IntentBuilder("StockPriceIntent") \
@@ -46,9 +49,12 @@ class StockSkill(MycroftSkill):
             self.emitter.once("recognizer_loop:audio_output_start",
                               self.enclosure.mouth_text(
                                   response['symbol'] + ": " + response[
-                                      'price']))
+                                      'price']))                                  
             self.enclosure.deactivate_mouth_events()
             self.speak_dialog("stock.price", data=response)
+            websymb = response['symbol']
+            self.__genwebview(websymb)
+            self.enclosure.ws.emit(Message("data", {'desktop': {'url': self.html_index + 'stockresult.html'}}))
             time.sleep(12)
             self.enclosure.activate_mouth_events()
             self.enclosure.mouth_reset()
@@ -71,7 +77,34 @@ class StockSkill(MycroftSkill):
         return {'symbol': root.iter('Symbol').next().text,
                 'company': root.iter('Name').next().text,
                 'price': root.iter('LastPrice').next().text}
-
+    
+    def __genwebview(self, symbol):
+        smbl = symbol
+        sjs = self.js_index
+        fname = self.html_index + 'stockresult.html'
+        f = open(fname,'w')
+        wrapper = """<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>Untitled Document</title>
+<link rel="stylesheet" href="https://code.jquery.com/ui/1.11.4/themes/smoothness/jquery-ui.css">
+<script src="https://code.jquery.com/jquery-1.10.2.js"></script>
+<script src="https://code.jquery.com/ui/1.11.4/jquery-ui.js"></script>  
+<script src="https://code.highcharts.com/stock/highstock.js"></script>
+<script src="https://code.highcharts.com/stock/modules/exporting.js"></script>
+<script src="{0}"></script>
+<script>
+new Markit.TimeseriesService("{1}", 365);
+</script>
+</head>
+<body>
+<div id="chartDemoContainer" style="min-width: 300px; height: 250px; margin: 0 auto"></div>
+</body>
+</html>""".format(sjs, smbl)
+        f.write(wrapper)
+        f.close()
+    
     def stop(self):
         pass
 
